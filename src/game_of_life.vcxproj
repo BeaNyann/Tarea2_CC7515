@@ -43,7 +43,7 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>C:\Users\ASUS\Documents\Escuela\CC7515 - Computación en GPU\Tarea 3\tarea_3\common\inc;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)\common\inc;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -58,6 +58,7 @@
     </Link>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
+      <KeepDir>$(CudaIntDir)</KeepDir>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -77,6 +78,7 @@
     </Link>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
+      <KeepDir>$(CudaIntDir)</KeepDir>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>

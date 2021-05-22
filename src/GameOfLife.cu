@@ -799,7 +799,7 @@ void runTests() {
 
 #pragma region BENCHMARKS
 // Benchmarks performance of the game of life in CPU.
-void benchmarkCPU(int startSize, int endSize, boolean verbose) {
+void benchmarkCPU(int startSize, int endSize, bool verbose) {
 	std::string sep(100, '-');
 	std::ofstream csvFile;
 	csvFile.open("benchmarkCPU.csv");
@@ -1006,15 +1006,15 @@ void runGame() {
 		std::cout << "[CUDA Game Of Life]" << std::endl;
 		iterateGPU(1, 32);
 		printGrid();
-		Sleep(800);
+		_sleep(800);
 	}
 }
 
 int main(int argc, char **argv) {
 	std::cout << "[CUDA Game Of Life] - Starting..." << std::endl;
-	runTests();
+	//runTests();
 	//runBenchmarks(std::pow(2, 5), std::pow(2, 15)); // Uncomment to measure performance
-	Sleep(5000);
+	_sleep(5000);
 	runGame();
 	return 0;
 }
