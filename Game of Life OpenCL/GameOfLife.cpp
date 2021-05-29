@@ -40,7 +40,9 @@ int initializeOpenCL() {
 	cl::Platform::get(&platforms);
 
 	// Select the platform.
-	platforms[platform_id].getDevices(CL_DEVICE_TYPE_GPU | CL_DEVICE_TYPE_CPU, &devices);
+	platforms[platform_id].getDevices(CL_DEVICE_TYPE_GPU, &devices);
+
+	std::cout << devices[0].getInfo<CL_DEVICE_VENDOR>() << " - " << devices[0].getInfo<CL_DEVICE_VERSION>() << std::endl;
 
 	// Create a context
 	context = cl::Context(devices);
@@ -51,7 +53,6 @@ int initializeOpenCL() {
 	std::ifstream sourceFile("kernel.cl");
 	std::string sourceCode(std::istreambuf_iterator<char>(sourceFile), (std::istreambuf_iterator<char>()));
 	cl::Program::Sources source = { sourceCode };
-
 	program = cl::Program(context, source);
 
 
@@ -117,33 +118,32 @@ void initGrid(size_t height, size_t width, bool verbose) {
 }
 
 
-void iterateGPU(size_t iterations, unsigned short numThreads) {
-	size_t	 memSizeGrid = sizeof(char) * gridSize;
+void iterateGPU(unsigned short numThreads) {
+	size_t memSizeGrid = sizeof(char) * gridSize;
 
-	cl::Buffer d_grid = cl::Buffer(context, CL_MEM_READ_WRITE, memSizeGrid);
-	cl::Buffer d_auxGrid = cl::Buffer(context, CL_MEM_READ_WRITE, memSizeGrid);
+	cl::Buffer d_grid = cl::Buffer(context, CL_MEM_READ_ONLY, memSizeGrid);
+	cl::Buffer d_auxGrid = cl::Buffer(context, CL_MEM_WRITE_ONLY, memSizeGrid);
 
 	queue.enqueueWriteBuffer(d_grid, CL_FALSE, 0, memSizeGrid, h_grid);
-	queue.enqueueWriteBuffer(d_auxGrid, CL_FALSE, 0, memSizeGrid, h_auxGrid);
+	//queue.enqueueWriteBuffer(d_auxGrid, CL_FALSE, 0, memSizeGrid, h_auxGrid);
 
 
-	size_t reqBlocks = gridWidth * gridHeight / numThreads;
-	unsigned short blocksCount = (unsigned short)min((size_t)32768, reqBlocks);
-	for (size_t i = 0; i < iterations; i++) {
-		// Set the kernel arguments
-		gameOfLife_kernel.setArg(0, d_grid);
-		gameOfLife_kernel.setArg(1, d_auxGrid);
-		gameOfLife_kernel.setArg(2, gridWidth);
-		gameOfLife_kernel.setArg(3, gridHeight);
+	size_t blocksCount = (gridWidth * gridHeight) / numThreads;
+	cl::NDRange global(blocksCount * numThreads);
+	cl::NDRange local(numThreads);
 
-		// Execute the kernel
-		cl::NDRange global(blocksCount);
-		cl::NDRange local(numThreads);
-		queue.enqueueNDRangeKernel(gameOfLife_kernel, cl::NullRange, global, local);
-		std::swap(d_grid, d_auxGrid);
-	}
+	// Set the kernel arguments
+	gameOfLife_kernel.setArg(0, d_grid);
+	gameOfLife_kernel.setArg(1, d_auxGrid);
+	gameOfLife_kernel.setArg(2, gridWidth);
+	gameOfLife_kernel.setArg(3, gridHeight);
+
+	// Execute the kernel
+
+	queue.enqueueNDRangeKernel(gameOfLife_kernel, cl::NullRange, global, local);
+
 	// Copy the output data back to the host
-	queue.enqueueReadBuffer(d_grid, CL_TRUE, 0, blocksCount, h_grid);
+	queue.enqueueReadBuffer(d_auxGrid, CL_TRUE, 0, memSizeGrid, h_grid);
 }
 
 
@@ -168,13 +168,13 @@ void printGrid() {
 
 
 void runGame() {
-	initGrid(25, 25, false);
+	initGrid(20, 20, false);
 	while (true) {
 		if (system("CLS")) {
 			system("clear");
 		}
 		std::cout << "[OpenCL Game Of Life]" << std::endl;
-		iterateGPU(1, 32);
+		iterateGPU(64);
 		printGrid();
 		Sleep(800);
 	}

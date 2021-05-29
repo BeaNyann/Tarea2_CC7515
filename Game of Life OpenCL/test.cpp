@@ -4,11 +4,11 @@
 #include <memory>
 #include <stdlib.h>
 
-#define __CL_ENABLE_EXCEPTIONS
+#define CL_HPP_ENABLE_EXCEPTIONS
 #ifdef __APPLE__
 #include <OpenCL/cl.hpp>
 #else
-#include <CL/cl2.hpp>
+#include <CL/opencl.hpp>
 #endif
 
 int main2() {
@@ -32,6 +32,17 @@ int main2() {
 		// Get a list of devices on this platform
 		std::vector<cl::Device> devices;
 		// Select the platform.
+		for (cl::Platform& platform : platforms) {
+			std::cout << platform.getInfo<CL_PLATFORM_VENDOR>() << " - "
+				<< platform.getInfo<CL_PLATFORM_VERSION>() << std::endl;
+			platform.getDevices(CL_DEVICE_TYPE_ALL, &devices);
+			for (cl::Device& device : devices) {
+				std::cout << "\t" << device.getInfo<CL_DEVICE_VENDOR>() << " - "
+					<< device.getInfo<CL_DEVICE_VERSION>() << std::endl;
+			}
+		}
+
+		/*
 		platforms[platform_id].getDevices(CL_DEVICE_TYPE_GPU | CL_DEVICE_TYPE_CPU, &devices);
 
 		// Create a context
@@ -90,6 +101,7 @@ int main2() {
 			std::cout << "Success!\n";
 		else
 			std::cout << "Failed!\n";
+		*/
 	}
 	catch (cl::Error err) {
 		std::cout << "Error: " << err.what() << "(" << err.err() << ")" << std::endl;

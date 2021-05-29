@@ -14,7 +14,7 @@
     <ProjectGuid>{9A3D8A44-A50A-4F69-A40A-35C54BBB3481}</ProjectGuid>
     <RootNamespace>tarea_3</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <ProjectName>Game of Life</ProjectName>
+    <ProjectName>Game of Life CUDA</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
