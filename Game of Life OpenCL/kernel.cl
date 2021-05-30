@@ -50,7 +50,14 @@ kernel void gameOfLifeIfKernel(global char* golGrid, global char* auxGolGrid, ul
 		if (golGrid[x + yDown]) aliveCells++;
 		if (golGrid[xRight + yDown]) aliveCells++;
 
-		auxGolGrid[x + y] = aliveCells == 3
-			|| (aliveCells == 2 && golGrid[x + y]) ? 1 : 0;
+		if (aliveCells == 3) {
+			auxGolGrid[x + y] = 1;
+		}
+		else if (aliveCells == 2 && golGrid[x + y]) {
+			auxGolGrid[x + y] = 1;
+		}
+		else {
+			auxGolGrid[x + y] = 0;
+		}
 	}
 }

@@ -129,11 +129,11 @@ void initGrid(size_t height, size_t width, bool verbose) {
 }
 
 
-void iterateGPU(unsigned short numThreads) {
+void iterateGPU(size_t iterations, unsigned short numThreads) {
 	size_t memSizeGrid = sizeof(char) * gridSize;
 
-	cl::Buffer d_grid = cl::Buffer(context, CL_MEM_READ_ONLY, memSizeGrid);
-	cl::Buffer d_auxGrid = cl::Buffer(context, CL_MEM_WRITE_ONLY, memSizeGrid);
+	cl::Buffer d_grid = cl::Buffer(context, CL_MEM_READ_WRITE, memSizeGrid);
+	cl::Buffer d_auxGrid = cl::Buffer(context, CL_MEM_READ_WRITE, memSizeGrid);
 
 	queue.enqueueWriteBuffer(d_grid, CL_FALSE, 0, memSizeGrid, h_grid);
 	//queue.enqueueWriteBuffer(d_auxGrid, CL_FALSE, 0, memSizeGrid, h_auxGrid);
@@ -143,18 +143,19 @@ void iterateGPU(unsigned short numThreads) {
 	cl::NDRange global(blocksCount * numThreads);
 	cl::NDRange local(numThreads);
 
-	// Set the kernel arguments
-	gameOfLife_kernel.setArg(0, d_grid);
-	gameOfLife_kernel.setArg(1, d_auxGrid);
-	gameOfLife_kernel.setArg(2, gridWidth);
-	gameOfLife_kernel.setArg(3, gridHeight);
+	for (size_t i = 0; i < iterations; i++) {
+		// Set the kernel arguments
+		gameOfLife_kernel.setArg(0, d_grid);
+		gameOfLife_kernel.setArg(1, d_auxGrid);
+		gameOfLife_kernel.setArg(2, gridWidth);
+		gameOfLife_kernel.setArg(3, gridHeight);
 
-	// Execute the kernel
-
-	queue.enqueueNDRangeKernel(gameOfLife_kernel, cl::NullRange, global, local);
-
+		// Execute the kernel
+		queue.enqueueNDRangeKernel(gameOfLife_kernel, cl::NullRange, global, local);
+		std::swap(d_grid, d_auxGrid);
+	}
 	// Copy the output data back to the host
-	queue.enqueueReadBuffer(d_auxGrid, CL_TRUE, 0, memSizeGrid, h_grid);
+	queue.enqueueReadBuffer(d_grid, CL_TRUE, 0, memSizeGrid, h_grid);
 }
 
 void iterateCPU(size_t iterations) {
@@ -177,7 +178,7 @@ void iterateCPU(size_t iterations) {
 	}
 }
 
-void iterateGPU_IF(unsigned short numThreads) {
+void iterateGPU_IF(size_t iterations, unsigned short numThreads) {
 	size_t memSizeGrid = sizeof(char) * gridSize;
 
 	cl::Buffer d_grid = cl::Buffer(context, CL_MEM_READ_ONLY, memSizeGrid);
@@ -191,18 +192,50 @@ void iterateGPU_IF(unsigned short numThreads) {
 	cl::NDRange global(blocksCount * numThreads);
 	cl::NDRange local(numThreads);
 
-	// Set the kernel arguments
-	gameOfLife_if_kernel.setArg(0, d_grid);
-	gameOfLife_if_kernel.setArg(1, d_auxGrid);
-	gameOfLife_if_kernel.setArg(2, gridWidth);
-	gameOfLife_if_kernel.setArg(3, gridHeight);
+	for (size_t i = 0; i < iterations; i++) {
 
-	// Execute the kernel
+		// Set the kernel arguments
+		gameOfLife_if_kernel.setArg(0, d_grid);
+		gameOfLife_if_kernel.setArg(1, d_auxGrid);
+		gameOfLife_if_kernel.setArg(2, gridWidth);
+		gameOfLife_if_kernel.setArg(3, gridHeight);
 
-	queue.enqueueNDRangeKernel(gameOfLife_if_kernel, cl::NullRange, global, local);
-
+		// Execute the kernel
+		queue.enqueueNDRangeKernel(gameOfLife_if_kernel, cl::NullRange, global, local);
+		std::swap(d_grid, d_auxGrid);
+	}
 	// Copy the output data back to the host
-	queue.enqueueReadBuffer(d_auxGrid, CL_TRUE, 0, memSizeGrid, h_grid);
+	queue.enqueueReadBuffer(d_grid, CL_TRUE, 0, memSizeGrid, h_grid);
+}
+
+void iterateGPU_BS(size_t iterations, unsigned short numBlocks) {
+	size_t memSizeGrid = sizeof(char) * gridSize;
+
+	cl::Buffer d_grid = cl::Buffer(context, CL_MEM_READ_ONLY, memSizeGrid);
+	cl::Buffer d_auxGrid = cl::Buffer(context, CL_MEM_WRITE_ONLY, memSizeGrid);
+
+	queue.enqueueWriteBuffer(d_grid, CL_FALSE, 0, memSizeGrid, h_grid);
+	//queue.enqueueWriteBuffer(d_auxGrid, CL_FALSE, 0, memSizeGrid, h_auxGrid);
+
+
+	size_t numThreads = (gridWidth * gridHeight) / numBlocks;
+	cl::NDRange global(numThreads * numBlocks);
+	cl::NDRange local(numThreads);
+
+	for (size_t i = 0; i < iterations; i++) {
+
+		// Set the kernel arguments
+		gameOfLife_kernel.setArg(0, d_grid);
+		gameOfLife_kernel.setArg(1, d_auxGrid);
+		gameOfLife_kernel.setArg(2, gridWidth);
+		gameOfLife_kernel.setArg(3, gridHeight);
+
+		// Execute the kernel
+		queue.enqueueNDRangeKernel(gameOfLife_kernel, cl::NullRange, global, local);
+		std::swap(d_grid, d_auxGrid);
+	}
+	// Copy the output data back to the host
+	queue.enqueueReadBuffer(d_grid, CL_TRUE, 0, memSizeGrid, h_grid);
 }
 
 
@@ -228,12 +261,215 @@ void printGrid() {
 }
 
 
+#pragma region BENCHMARKS
+// Benchmarks performance of the game of life in CPU.
+void benchmarkCPU(int startSize, int endSize, bool verbose) {
+	std::string sep(100, '-');
+	std::ofstream csvFile;
+	csvFile.open("benchmarkCPU.csv");
+	csvFile << "grid_size,cells/sec" << std::endl;
+
+	std::cout << std::string(100, '=') << std::endl;
+	std::cout << "BENCHMARKING: GOL CPU."
+		<< std::endl << std::endl;
+
+	size_t dim = startSize;
+	while (dim <= endSize) {
+		std::cout << sep << std::endl;
+		std::cout << "Computing 16 iterations for a " << dim << " x " << dim
+			<< " grid (" << (dim * dim) << " cells)." << std::endl;
+		double cellsPerSec = 0.0;
+		double meanTime = 0.0;
+		for (size_t i = 0; i < 5; i++) {
+			initGrid(dim, dim, verbose);
+			auto startTime = std::chrono::high_resolution_clock::now();
+			iterateCPU(16);
+			auto endTime = std::chrono::high_resolution_clock::now();
+			std::chrono::duration<double> delta = endTime - startTime;
+			cellsPerSec += gridSize / delta.count();
+			meanTime += delta.count();
+		}
+		cellsPerSec /= 5;
+		csvFile << gridSize << "," << cellsPerSec << std::endl;
+		std::cout << "Mean elapsed time: " << meanTime << " s" << std::endl;
+		std::cout << "Cells/sec: " << cellsPerSec << std::endl;
+		dim *= 2;
+	}
+	csvFile.close();
+	deleteGrid();
+}
+
+// Benchmark performance of the game of life in GPU.
+void benchmarkGPU(int startSize, int endSize, unsigned short threads, bool verbose) {
+	std::string sep(100, '-');
+	std::ofstream csvFile;
+	std::ostringstream filename;
+	filename << "benchmarkGPU_x" << threads << "th.csv";
+	csvFile.open(filename.str());
+	csvFile << "grid_size,cells/sec" << std::endl;
+
+	std::cout << std::string(100, '=') << std::endl;
+	std::cout << "BENCHMARKING: GOL GPU on " << threads << " threads."
+		<< std::endl << std::endl;
+
+	size_t dim = startSize;
+	while (dim <= endSize) {
+		std::cout << sep << std::endl;
+		std::cout << "Computing 16 iterations for a " << dim << " x " << dim
+			<< " grid (" << (dim * dim) << " cells)." << std::endl;
+		std::cout << "threads: " << threads << std::endl;
+		size_t reqBlocks = (dim * dim) / threads;
+		unsigned short blockSize
+			= (unsigned short)min((size_t)32768, reqBlocks);
+		std::cout << "block_size: " << blockSize << std::endl;
+		double cellsPerSec = 0.0;
+		double meanTime = 0.0;
+
+		for (size_t i = 0; i < 5; i++) {
+			initGrid(dim, dim, verbose);
+			auto startTime = std::chrono::high_resolution_clock::now();
+			iterateGPU(16, threads);
+			auto endTime = std::chrono::high_resolution_clock::now();
+			std::chrono::duration<double> delta = endTime - startTime;
+			cellsPerSec += gridSize / delta.count();
+			meanTime += delta.count();
+		}
+		cellsPerSec /= 5;
+		csvFile << gridSize << "," << cellsPerSec << std::endl;
+		std::cout << "Mean elapsed time: " << meanTime << " s" << std::endl;
+		std::cout << "Cells/sec: " << cellsPerSec << std::endl;
+		dim *= 2;
+	}
+	csvFile.close();
+	deleteGrid();
+}
+
+// Benchmark performance of the game of life with ifs in GPU.
+void benchmarkGPU_If(int startSize, int endSize, unsigned short threads,
+	bool verbose) {
+	std::string sep(100, '-');
+	std::ofstream csvFile;
+	std::ostringstream filename;
+	filename << "benchmarkGPU-If_x" << threads << "th.csv";
+	csvFile.open(filename.str());
+	csvFile << "grid_size,cells/sec" << std::endl;
+
+	std::cout << std::string(100, '=') << std::endl;
+	std::cout << "BENCHMARKING: GOL GPU-If on " << threads << " threads."
+		<< std::endl << std::endl;
+
+	size_t dim = startSize;
+	while (dim <= endSize) {
+		std::cout << sep << std::endl;
+		std::cout << "Computing 16 iterations for a " << dim << " x " << dim
+			<< " grid (" << (dim * dim) << " cells)." << std::endl;
+		std::cout << "threads: " << threads << std::endl;
+		size_t reqBlocks = (dim * dim) / threads;
+		unsigned short blockSize
+			= (unsigned short)min((size_t)32768, reqBlocks);
+		std::cout << "block_size: " << blockSize << std::endl;
+		double cellsPerSec = 0.0;
+		double meanTime = 0.0;
+		for (size_t i = 0; i < 5; i++) {
+			initGrid(dim, dim, verbose);
+			auto startTime = std::chrono::high_resolution_clock::now();
+			iterateGPU_IF(16, threads);
+			auto endTime = std::chrono::high_resolution_clock::now();
+			std::chrono::duration<double> delta = endTime - startTime;
+			cellsPerSec += gridSize / delta.count();
+			meanTime += delta.count();
+		}
+		cellsPerSec /= 5;
+		csvFile << gridSize << "," << cellsPerSec << std::endl;
+		std::cout << "Mean elapsed time: " << meanTime << " s" << std::endl;
+		std::cout << "Cells/sec: " << cellsPerSec << std::endl;
+		dim *= 2;
+	}
+	csvFile.close();
+	deleteGrid();
+}
+
+// Benchmark performance of the game of life with fixed block size in GPU.
+void benchmarkGPU_BS(int startSize, int endSize, unsigned short blockSize,
+	bool verbose) {
+
+	std::string sep(100, '-');
+	std::ofstream csvFile;
+	std::ostringstream filename;
+	filename << "benchmarkGPU-BS_x" << blockSize << "bs.csv";
+	csvFile.open(filename.str());
+	csvFile << "grid_size,cells/sec" << std::endl;
+
+	std::cout << std::string(100, '=') << std::endl;
+	std::cout << "BENCHMARKING: GOL GPU-BS with block size of " << blockSize << "."
+		<< std::endl << std::endl;
+
+	size_t dim = startSize;
+	while (dim <= endSize) {
+		std::cout << sep << std::endl;
+		std::cout << "Computing 16 iterations for a " << dim << " x " << dim
+			<< " grid (" << (dim * dim) << " cells)." << std::endl;
+		size_t reqThreads = max((size_t)2, (dim * dim) / blockSize);
+		unsigned short threads = (unsigned short)min((size_t)32768, reqThreads);
+		std::cout << "threads: " << threads << std::endl;
+		std::cout << "block_size: " << blockSize << std::endl;
+		double cellsPerSec = 0.0;
+		double meanTime = 0.0;
+		for (size_t i = 0; i < 5; i++) {
+			initGrid(dim, dim, verbose);
+			auto startTime = std::chrono::high_resolution_clock::now();
+			iterateGPU_BS(16, blockSize);
+			auto endTime = std::chrono::high_resolution_clock::now();
+			std::chrono::duration<double> delta = endTime - startTime;
+			cellsPerSec += gridSize / delta.count();
+			meanTime += delta.count();
+		}
+		cellsPerSec /= 5;
+		csvFile << gridSize << "," << cellsPerSec << std::endl;
+		std::cout << "Mean elapsed time: " << meanTime << " s" << std::endl;
+		std::cout << "Cells/sec: " << cellsPerSec << std::endl;
+		dim *= 2;
+	}
+	csvFile.close();
+	deleteGrid();
+}
+
+/*
+ * Runs benchmarks for the game of life with different implementations and
+ * configurations.
+ */
+void runBenchmarks(int startSize, int endSize) {
+	auto startTime = std::chrono::high_resolution_clock::now();
+	// Performance de CPU
+	//benchmarkCPU(startSize, endSize, false);
+	//// Performance GPU-If
+	//benchmarkGPU_If(startSize, endSize, 128, false);
+	// Performance GPU tpb 32x
+	benchmarkGPU(startSize, endSize, 1024, true);
+	benchmarkGPU(startSize, endSize, 512, true);
+	benchmarkGPU(startSize, endSize, 256, true);
+	benchmarkGPU(startSize, endSize, 128, true);
+	benchmarkGPU(startSize, endSize, 64, true);
+	benchmarkGPU(startSize, endSize, 32, true);
+	// Performance GPU tpb ~32x
+	benchmarkGPU(startSize, endSize, 625, true);
+	benchmarkGPU(startSize, endSize, 81, true);
+
+	auto endTime = std::chrono::high_resolution_clock::now();
+	std::chrono::duration<double> delta = endTime - startTime;
+	std::cout << std::endl;
+	std::cout << "Total elapsed time: " << delta.count() << " s" << std::endl;
+}
+#pragma endregion
+
+
+
 void runGame() {
 	initGrid(26, 36, false);
 	while (true) {
 		clear_screen();
 		std::cout << "[OpenCL Game Of Life]" << std::endl;
-		iterateCPU(1);
+		iterateGPU_IF(1, 64);
 		printGrid();
 		Sleep(800);
 	}
@@ -246,7 +482,7 @@ int main(int argc, char** argv) {
 	if (error) {
 		return 1;
 	}
-
+	//runBenchmarks(pow(2, 5), pow(2, 10));
 	std::cout << "Inicializado correctamente :D" << std::endl;
 	Sleep(2000);
 	runGame();
