@@ -146,6 +146,26 @@ void iterateGPU(unsigned short numThreads) {
 	queue.enqueueReadBuffer(d_auxGrid, CL_TRUE, 0, memSizeGrid, h_grid);
 }
 
+void iterateCPU(size_t iterations) {
+	for (size_t it = 0; it < iterations; it++) {
+		for (size_t cellId = 0; cellId < gridSize; cellId++) {
+			unsigned int x = cellId % gridWidth;
+			unsigned int y = cellId - x;
+			unsigned int xLeft = (x + gridWidth - 1) % gridWidth;
+			unsigned int xRight = (x + 1) % gridWidth;
+			unsigned int yUp = (y + gridSize - gridWidth) % gridSize;
+			unsigned int yDown = (y + gridWidth) % gridSize;
+
+			unsigned int aliveCells = h_grid[xLeft + yUp] + h_grid[x + yUp]
+				+ h_grid[xRight + yUp] + h_grid[xLeft + y] + h_grid[xRight + y]
+				+ h_grid[xLeft + yDown] + h_grid[x + yDown] + h_grid[xRight + yDown];
+			h_auxGrid[x + y] = aliveCells == 3
+				|| (aliveCells == 2 && h_grid[x + y]) ? 1 : 0;
+		}
+		std::swap(h_grid, h_auxGrid);
+	}
+}
+
 
 void printGrid(char* grid, size_t width, size_t height) {
 	for (size_t row = 0; row < height; row++) {
