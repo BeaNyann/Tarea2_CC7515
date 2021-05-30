@@ -31,6 +31,7 @@ cl::CommandQueue queue;
 cl::Context context;
 cl::Program program;
 cl::Kernel gameOfLife_kernel;
+cl::Kernel gameOfLife_if_kernel;
 
 void clear_screen() {
 	char fill = ' ';
@@ -87,6 +88,7 @@ int initializeOpenCL() {
 	}
 	// Make kernel
 	gameOfLife_kernel = cl::Kernel(program, "gameOfLifeKernel");
+	gameOfLife_if_kernel = cl::Kernel(program, "gameOfLifeIfKernel");
 	return 0;
 }
 
@@ -173,6 +175,34 @@ void iterateCPU(size_t iterations) {
 		}
 		std::swap(h_grid, h_auxGrid);
 	}
+}
+
+void iterateGPU_IF(unsigned short numThreads) {
+	size_t memSizeGrid = sizeof(char) * gridSize;
+
+	cl::Buffer d_grid = cl::Buffer(context, CL_MEM_READ_ONLY, memSizeGrid);
+	cl::Buffer d_auxGrid = cl::Buffer(context, CL_MEM_WRITE_ONLY, memSizeGrid);
+
+	queue.enqueueWriteBuffer(d_grid, CL_FALSE, 0, memSizeGrid, h_grid);
+	//queue.enqueueWriteBuffer(d_auxGrid, CL_FALSE, 0, memSizeGrid, h_auxGrid);
+
+
+	size_t blocksCount = (gridWidth * gridHeight) / numThreads;
+	cl::NDRange global(blocksCount * numThreads);
+	cl::NDRange local(numThreads);
+
+	// Set the kernel arguments
+	gameOfLife_if_kernel.setArg(0, d_grid);
+	gameOfLife_if_kernel.setArg(1, d_auxGrid);
+	gameOfLife_if_kernel.setArg(2, gridWidth);
+	gameOfLife_if_kernel.setArg(3, gridHeight);
+
+	// Execute the kernel
+
+	queue.enqueueNDRangeKernel(gameOfLife_if_kernel, cl::NullRange, global, local);
+
+	// Copy the output data back to the host
+	queue.enqueueReadBuffer(d_auxGrid, CL_TRUE, 0, memSizeGrid, h_grid);
 }
 
 
