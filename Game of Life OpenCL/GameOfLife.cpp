@@ -7,11 +7,7 @@
 
 #define CL_HPP_TARGET_OPENCL_VERSION 300
 #define CL_HPP_ENABLE_EXCEPTIONS
-#ifdef __APPLE__
-#include <OpenCL/cl.hpp>
-#else
 #include <CL/opencl.hpp>
-#endif
 
 #include <Windows.h>
 
@@ -35,6 +31,19 @@ cl::CommandQueue queue;
 cl::Context context;
 cl::Program program;
 cl::Kernel gameOfLife_kernel;
+
+void clear_screen() {
+	char fill = ' ';
+	COORD tl = { 0,0 };
+	CONSOLE_SCREEN_BUFFER_INFO s;
+	HANDLE console = GetStdHandle(STD_OUTPUT_HANDLE);
+	GetConsoleScreenBufferInfo(console, &s);
+	DWORD written, cells = s.dwSize.X * s.dwSize.Y;
+	FillConsoleOutputCharacter(console, fill, cells, tl, &written);
+	FillConsoleOutputAttribute(console, s.wAttributes, cells, tl, &written);
+	SetConsoleCursorPosition(console, tl);
+}
+
 
 int initializeOpenCL() {
 	cl::Platform::get(&platforms);
@@ -168,15 +177,17 @@ void iterateCPU(size_t iterations) {
 
 
 void printGrid(char* grid, size_t width, size_t height) {
+	std::string s = "";
 	for (size_t row = 0; row < height; row++) {
 		for (size_t col = 0; col < width; col++) {
 			if (grid[row * width + col] == 1)
-				std::cout << " O ";
+				s += " O ";
 			else
-				std::cout << "   ";
+				s += "   ";
 		}
-		std::cout << std::endl;
+		s += "\n";
 	}
+	std::cout << s;
 }
 
 
@@ -188,11 +199,9 @@ void printGrid() {
 
 
 void runGame() {
-	initGrid(20, 20, false);
+	initGrid(26, 36, false);
 	while (true) {
-		if (system("CLS")) {
-			system("clear");
-		}
+		clear_screen();
 		std::cout << "[OpenCL Game Of Life]" << std::endl;
 		iterateGPU(64);
 		printGrid();
@@ -209,9 +218,7 @@ int main(int argc, char** argv) {
 	}
 
 	std::cout << "Inicializado correctamente :D" << std::endl;
-	//runTests();
-	//runBenchmarks(std::pow(2, 5), std::pow(2, 15)); // Uncomment to measure performance
-	Sleep(5000);
+	Sleep(2000);
 	runGame();
 	return 0;
 }
