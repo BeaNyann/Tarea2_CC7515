@@ -233,7 +233,7 @@ void runGame() {
 	while (true) {
 		clear_screen();
 		std::cout << "[OpenCL Game Of Life]" << std::endl;
-		iterateGPU(64);
+		iterateCPU(1);
 		printGrid();
 		Sleep(800);
 	}

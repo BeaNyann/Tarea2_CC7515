@@ -25,8 +25,7 @@ kernel void gameOfLifeKernel(global char* golGrid, global char* auxGolGrid, ulon
 
 // Kernel that computes an iteration of the game of life using ifs to check for
 // alive neighbours.
-__global__ void gameOfLifeIfKernel(char *golGrid,
-	unsigned int width, unsigned int height, char *auxGolGrid) {
+kernel void gameOfLifeIfKernel(global char* golGrid, global char* auxGolGrid, ulong width, ulong height) {
 
 	unsigned int size = width * height;
 
