@@ -466,9 +466,9 @@ void benchmarkGPU_BS(int startSize, int endSize, unsigned short blockSize,
 void runBenchmarks(int startSize, int endSize) {
 	auto startTime = std::chrono::high_resolution_clock::now();
 	// Performance de CPU
-	//benchmarkCPU(startSize, endSize, false);
+	benchmarkCPU(startSize, endSize, false);
 	//// Performance GPU-If
-	//benchmarkGPU_If(startSize, endSize, 1024, true);
+	benchmarkGPU_If(startSize, endSize, 1024, true);
 	// Performance GPU tpb 32x
 	benchmarkGPU(startSize, endSize, 1024, true);
 	benchmarkGPU(startSize, endSize, 512, true);
@@ -502,8 +502,8 @@ void runGame() {
 
 int main(int argc, char **argv) {
 	std::cout << "[CUDA Game Of Life] - Starting..." << std::endl;
-	runBenchmarks(std::pow(2, 5), std::pow(2, 5)); // Uncomment to measure performance
+	runBenchmarks(std::pow(2, 5), std::pow(2, 5));
 	_sleep(5000);
-	//runGame();
+	runGame();
 	return 0;
 }
